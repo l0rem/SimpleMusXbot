@@ -1,4 +1,4 @@
-url = 'https://wqo.mp3-tut.online/search?query='
+url = 'https://wwi.mp3-tut.online/search?query='
 token = 'YOUR_BOT_TOKEN'
 
 song_form = '''<b>Performer:</b> <i>{}</i>
