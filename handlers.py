@@ -1,7 +1,7 @@
 from telegram.ext import (CommandHandler, MessageHandler, Filters, CallbackQueryHandler)
 from telegram import (ParseMode, InlineKeyboardButton, InlineKeyboardMarkup)
 from engine import *
-from consts import song_form, storage_cid
+from phrases import song_form, storage_cid
 import os
 from random import randint
 

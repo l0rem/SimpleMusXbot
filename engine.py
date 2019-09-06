@@ -1,5 +1,5 @@
 import requests
-from consts import url
+from phrases import url
 from bs4 import BeautifulSoup
 
 
