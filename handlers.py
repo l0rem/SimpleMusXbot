@@ -1,156 +1,214 @@
-from telegram.ext import (CommandHandler, MessageHandler, Filters, CallbackQueryHandler)
-from telegram import (ParseMode, InlineKeyboardButton, InlineKeyboardMarkup)
-from engine import *
-from phrases import song_form, storage_cid
+from telegram.ext import (CommandHandler, MessageHandler, Filters, CallbackQueryHandler, callbackcontext, run_async)
+from telegram import (ParseMode, InlineKeyboardButton, InlineKeyboardMarkup, Update)
+from telegram.error import BadRequest
+from musxtools import parse_html, get_html, add_url, format_query
+import requests
+from phrases import track_form, start_phrase, no_results_phrase, searching_phrase, download_started_phrase,\
+    file_too_large_phrase, error_occurred_phrase
+from buttons import download_button_text, next_button_text, previous_button_text
+from chattools import clean_chat, get_cid
 import os
 from random import randint
 
 
-def start(update, context):
-    context.bot.send_message(chat_id=update.message.chat_id, text='<b>Hello there!</b>\n'
-                                                                  'The only command this bot supports is /start. '
-                                                                  'Just send performer and(/ or) title of wished song '
-                                                                  'and choose one from list.',
-                             parse_mode=ParseMode.HTML)
+def start_callback(update: Update, context: callbackcontext):
+    """ /start callback (private chat only)"""
+
+    clean_chat(update, context)
+
+    update.message.reply_text(text=start_phrase,
+                              parse_mode=ParseMode.HTML)
 
 
-start_handler = CommandHandler('start', start)
+start_handler = CommandHandler(command='start',
+                               callback=start_callback,
+                               pass_chat_data=True,
+                               filters=Filters.private)
 
 
-def query(update, context):
+def query_callback(update: Update, context: callbackcontext):
+    """ search query callback (private chat only) """
+
+    cid = get_cid(update)
     q = update.message.text
 
-    if 'mids' in context.chat_data.keys() and len(context.chat_data['mids']) != 0:
-        for mid in context.chat_data['mids']:
-            try:
-                context.bot.delete_message(update.message.chat_id, mid)
-            except Exception as e:
-                print(e)
-    context.chat_data['mids'] = list()
+    clean_chat(update, context)
+
+    message_id = context.bot.send_message(chat_id=cid,
+                                          text=searching_phrase,
+                                          parse_mode=ParseMode.HTML).message_id
 
     results = parse_html(get_html(add_url(format_query(q))))
 
     if len(results) == 0:
-        context.bot.send_message(update.message.chat_id, '<b>Didnt find any matching songs.</b>'
-                                                         '\nTry changing search query.', parse_mode=ParseMode.HTML)
+
+        context.bot.edit_message_text(chat_id=cid,
+                                      message_id=message_id,
+                                      text=no_results_phrase,
+                                      parse_mode=ParseMode.HTML)
+
+        context.chat_data.update({'message_ids': [message_id]})
+
         return
-    mids = []
+
     context.chat_data.update({'results': results})
-    context.chat_data.update({'current_page': 0})
-    mids.append(context.bot.send_message(update.message.chat_id, '<b>###### Page 1 ######</b>',
-                                         parse_mode=ParseMode.HTML).message_id)
 
-    for i in range(5):
-        d_button = InlineKeyboardButton(text='\U00002B07 Download', callback_data='download:{}'.format(i))
-        kb = InlineKeyboardMarkup([[d_button]])
-        mids.append(context.bot.send_message(update.message.chat_id, song_form.format(results[i]['performer'],
-                                                                                      results[i]['title'],
-                                                                                      results[i]['duration']),
-                                             parse_mode=ParseMode.HTML,
-                                             reply_markup=kb).message_id)
+    download_button = InlineKeyboardButton(text=download_button_text,
+                                           callback_data='download:0')
 
-    if len(results) > 5:
-        next_b = InlineKeyboardButton('Next page \U000027A1', callback_data='+page')
-        page_kb = InlineKeyboardMarkup([[next_b]])
+    if len(results) > 1:
+        next_button = InlineKeyboardButton(text=next_button_text,
+                                           callback_data='track:1')
+
+        keyboard = InlineKeyboardMarkup([[download_button],
+                                         [next_button]])
     else:
-        page_kb = InlineKeyboardMarkup([[]])
 
-    mids.append(context.bot.send_message(update.message.chat_id, '<b>###### Page 1 ######</b>', parse_mode=ParseMode.HTML,
-                                         reply_markup=page_kb).message_id)
-    context.chat_data.update({'mids': mids})
+        keyboard = InlineKeyboardMarkup([[download_button]])
+
+    context.bot.edit_message_text(chat_id=cid,
+                                  message_id=message_id,
+                                  text=track_form.format(1,
+                                                         len(results),
+                                                         results[0]['performer'],
+                                                         results[0]['title'],
+                                                         results[0]['duration']),
+                                  parse_mode=ParseMode.HTML,
+                                  reply_markup=keyboard)
+
+    context.chat_data.update({'message_ids': [message_id]})
 
 
-query_handler = MessageHandler(Filters.text, query, pass_chat_data=True)
+query_handler = MessageHandler(callback=query_callback,
+                               filters=Filters.text,
+                               pass_chat_data=True)
 
 
-def change_page(update, context):
-    if update.callback_query.data[0] == '+':
-        page = context.chat_data['current_page'] + 1
+@run_async
+def switch_track_callback(update: Update, context: callbackcontext):
+
+    cid = get_cid(update)
+    mid = update.callback_query.message.message_id
+    next_track = int(update.callback_query.data.split(':')[-1])
+    results = context.chat_data['results']
+
+    download_button = InlineKeyboardButton(text=download_button_text,
+                                           callback_data='download:{}'.format(next_track))
+
+    next_button = InlineKeyboardButton(text=next_button_text,
+                                       callback_data='track:{}'.format(next_track + 1))
+
+    previous_button = InlineKeyboardButton(text=previous_button_text,
+                                           callback_data='track:{}'.format(next_track - 1))
+    if next_track == len(results) - 1:
+
+        keyboard = InlineKeyboardMarkup([[download_button],
+                                         [previous_button]])
+
+    elif next_track == 0:
+
+        keyboard = InlineKeyboardMarkup([[download_button],
+                                         [next_button]])
+
     else:
-        page = context.chat_data['current_page'] - 1
 
-    for mid in context.chat_data['mids']:
-        context.bot.delete_message(update.callback_query.message.chat_id, mid)
-    context.chat_data.update({'current_page': page})
-    mids = list()
-    mids.append(context.bot.send_message(update.callback_query.message.chat_id, '<b>###### Page {} #####</b>'.format(page + 1),
-                                         parse_mode=ParseMode.HTML).message_id)
-    for i in range(5):
-        d_button = InlineKeyboardButton(text='\U00002B07 Download', callback_data='download:{}'.format(i + 5*page))
-        kb = InlineKeyboardMarkup([[d_button]])
-        mids.append(context.bot.send_message(update.callback_query.message.chat_id,
-                                             song_form.format(context.chat_data['results'][i + page*5]['performer'],
-                                                              context.chat_data['results'][i + page*5]['title'],
-                                                              context.chat_data['results'][i + page*5]['duration']),
-                                             parse_mode=ParseMode.HTML,
-                                             reply_markup=kb).message_id)
+        keyboard = InlineKeyboardMarkup([[download_button],
+                                         [previous_button, next_button]])
 
-    next_b = InlineKeyboardButton('Next page\U000027A1', callback_data='+page')
-    prev_b = InlineKeyboardButton('\U00002B05Previous page', callback_data='-page')
-
-    if len(context.chat_data['results']) > 5 + page*5 and context.chat_data['results'][page*5] == context.chat_data['results'][0]:
-        page_kb = InlineKeyboardMarkup([[next_b]])
-    elif len(context.chat_data['results']) > 5 + page*5 and context.chat_data['results'][page*5] != context.chat_data['results'][0]:
-        page_kb = InlineKeyboardMarkup([[prev_b, next_b]])
-    elif len(context.chat_data['results']) <= 5 + page*5:
-        page_kb = InlineKeyboardMarkup([[prev_b]])
-    else:
-        page_kb = InlineKeyboardMarkup([[]])
-
-    mids.append(context.bot.send_message(update.callback_query.message.chat_id,
-                                         '<b>####### Page {} #######</b>'.format(page + 1),
-                                         parse_mode=ParseMode.HTML,
-                                         reply_markup=page_kb).message_id)
-    context.chat_data.update({'mids': mids})
+    context.bot.edit_message_text(chat_id=cid,
+                                  message_id=mid,
+                                  text=track_form.format(next_track + 1,
+                                                         len(results),
+                                                         results[next_track]['performer'],
+                                                         results[next_track]['title'],
+                                                         results[next_track]['duration']),
+                                  parse_mode=ParseMode.HTML,
+                                  reply_markup=keyboard)
 
 
-change_page_handler = CallbackQueryHandler(change_page, pattern='(.*)page', pass_chat_data=True)
+switch_track_handler = CallbackQueryHandler(callback=switch_track_callback,
+                                            pattern='track:(.*)',
+                                            pass_chat_data=True)
 
 
-def download(update, context):
-    context.bot.answerCallbackQuery(update.callback_query.id, text='Started downloading...')
-    song = context.chat_data['results'][int(update.callback_query.data.split(':')[1])]
-    d_url = song.get('d_link')
-    performer = song.get('performer')
-    title = song.get('title')
-    r = requests.get(d_url, stream=True)
-    fname = (performer + '-' + title + str(randint(1, 999)) + '.mp3').replace('/', 'or')
-    with open(fname, 'bw') as f:
+@run_async
+def download_track_callback(update: Update, context: callbackcontext):
+
+    cid = get_cid(update)
+
+    try:
+
+        context.bot.answerCallbackQuery(callback_query_id=update.callback_query.id,
+                                        text=download_started_phrase)
+    except BadRequest:          # user spams bot with downloads
+        pass
+
+    song_index = int(update.callback_query.data.split(':')[-1])
+    song = context.chat_data['results'][song_index]
+
+    download_url = song['download_url']
+    performer = song['performer']
+    title = song['title']
+
+    r = requests.get(download_url, stream=True)
+    file_name = (performer + '-' + title + str(randint(0, 9999)) + '.mp3').replace('/', ' ')
+
+    with open(file_name, 'bw') as file:
         for chunk in r.iter_content(2048):
-            f.write(chunk)
-    path = os.path.abspath(fname)
+            file.write(chunk)
+
+    path = os.path.abspath(file_name)
     size = ((os.path.getsize(path)) / 1024) / 1024
     size = round(size, 2)
+
     if size > 50:
         os.remove(path)
-        context.bot.send_message(chat_id=update.callback_query.message.chat_id,
-                                 text='Song <b>{}</b> by <b>{}</b> is too big.\nI can\'t upload it.'.format(title,
-                                                                                                            performer),
-                                 parse_mode=ParseMode.HTML)
-        return
-    fid = 0
-    for i in range(10):
+
         try:
-            audio = open(path, 'rb')
-            fid = context.bot.send_audio(chat_id=storage_cid,
-                                         performer=performer,
-                                         title=title,
-                                         audio=audio,
-                                         timeout=1000).audio.file_id
-            audio.close()
-        except Exception as e:
-            print(e)
+
+            context.bot.answerCallbackQuery(callback_query_id=update.callback_query.id,
+                                            text=file_too_large_phrase)
+
+        except BadRequest:
+            pass
+
+        return
+
+    file_id = 0
+
+    audio = open(path, 'rb')
+
+    for i in range(5):
+        try:
+            message = context.bot.send_audio(chat_id=cid,
+                                             performer=performer,
+                                             title=title,
+                                             audio=audio,
+                                             timeout=1000)
+
+            file_id = message.audio.file_id
+
+        except BadRequest:              # this is the only way to make sure the file was sent
             continue
         break
+
+    audio.close()
     os.remove(path)
-    if not fid:
-        context.bot.send_message(update.callback_query.message.chat_id,
-                                 '<b>Sorry, an error occured while uploading song.</b>')
-        return
-    context.bot.send_audio(update.callback_query.message.chat_id,
-                           fid)
+
+    if file_id == 0:
+
+        try:
+
+            context.bot.answerCallbackQuery(callback_query_id=update.callback_query.id,
+                                            text=error_occurred_phrase)
+
+        except BadRequest:          # callback_query is too old
+
+            pass
 
 
-download_handler = CallbackQueryHandler(download, pattern='download:(.*)', pass_chat_data=True)
+download_track_handler = CallbackQueryHandler(pattern='download:(.*)',
+                                              callback=download_track_callback,
+                                              pass_chat_data=True)
 
 

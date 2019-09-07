@@ -1,20 +1,21 @@
 import logging
-from handlers import *
+from handlers import start_handler, query_handler, switch_track_handler, download_track_handler
 from decouple import config
 from telegram.ext import Updater
 
 
-logging.basicConfig(level=logging.DEBUG,
-                    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+                    level=logging.getLevelName(config('LOG_LEVEL',
+                                                      default='DEBUG')))
 
-logger = logging.getLogger()
-logger.setLevel(logging.DEBUG)
+env = config('ENV',
+             default='DEV')
 
-env = config('ENV', default='dev')
+bot_token = config('BOT_TOKEN',
+                   default='token')
 
-bot_token = config('BOT_TOKEN', default='token')
-
-webhook_url = config('WEBHOOK_URL', default='url')
+webhook_url = config('WEBHOOK_URL',
+                     default='url')
 
 
 upd = Updater(bot_token,
@@ -26,10 +27,10 @@ def main():
 
     dp.add_handler(start_handler)
     dp.add_handler(query_handler)
-    dp.add_handler(change_page_handler)
-    dp.add_handler(download_handler)
+    dp.add_handler(switch_track_handler)
+    dp.add_handler(download_track_handler)
 
-    if env == 'dev':
+    if env == 'DEV':
         upd.start_polling()
     else:
 
