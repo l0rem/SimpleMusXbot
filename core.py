@@ -1,4 +1,5 @@
 import logging
+import dbmodels
 from handlers import start_handler, query_handler, switch_track_handler, download_track_handler
 from decouple import config
 from telegram.ext import Updater

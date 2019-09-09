@@ -1,12 +1,12 @@
 from telegram.ext import (CommandHandler, MessageHandler, Filters, CallbackQueryHandler, callbackcontext, run_async)
 from telegram import (ParseMode, InlineKeyboardButton, InlineKeyboardMarkup, Update)
 from telegram.error import BadRequest
-from musxtools import parse_html, get_html, add_url, format_query
+from musxtools import parse_html, get_html, add_url, format_query, store_track
 import requests
 from phrases import track_form, start_phrase, no_results_phrase, searching_phrase, download_started_phrase,\
     file_too_large_phrase, error_occurred_phrase
 from buttons import download_button_text, next_button_text, previous_button_text
-from chattools import clean_chat, get_cid
+from chattools import clean_chat, get_cid, store_user
 import os
 from random import randint
 
@@ -15,6 +15,7 @@ def start_callback(update: Update, context: callbackcontext):
     """ /start callback (private chat only)"""
 
     clean_chat(update, context)
+    store_user(update)
 
     update.message.reply_text(text=start_phrase,
                               parse_mode=ParseMode.HTML)
@@ -33,6 +34,7 @@ def query_callback(update: Update, context: callbackcontext):
     q = update.message.text
 
     clean_chat(update, context)
+    store_user(update)
 
     message_id = context.bot.send_message(chat_id=cid,
                                           text=searching_phrase,
@@ -205,6 +207,12 @@ def download_track_callback(update: Update, context: callbackcontext):
         except BadRequest:          # callback_query is too old
 
             pass
+
+    store_track(uid=cid,
+                title=title,
+                performer=performer,
+                file_id=file_id,
+                download_url=download_url)
 
 
 download_track_handler = CallbackQueryHandler(pattern='download:(.*)',
