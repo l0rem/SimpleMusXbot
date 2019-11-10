@@ -7,7 +7,7 @@ from telegram.ext import Updater
 
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
                     level=logging.getLevelName(config('LOG_LEVEL',
-                                                      default='DEBUG')))
+                                                      default='INFO')))
 
 env = config('ENV',
              default='DEV')
