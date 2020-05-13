@@ -82,10 +82,13 @@ def parse_html(html):
     for block in soup.find_all('div', class_='audio-list-entry-inner'):
         track = dict()
 
-        name = block.find_all('div', class_='title')
+        name = block.find('div', class_='track')
 
-        performer = name[0].next.next
-        title = name[1].next
+        performer = name.find('div', class_='title').next.next
+        try:
+            title = name.find('div', class_='special-title').next
+        except AttributeError:
+            title = name.find('div', class_='title').next.next
 
         duration = block.find('div', class_='audio-duration').next
         download_url = block.find('div', class_='download-container').find('a')['href']

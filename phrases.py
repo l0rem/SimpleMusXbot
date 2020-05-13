@@ -8,7 +8,7 @@ track_form = '''
 
 start_phrase = '<b>Hello, stranger!</b>\n\nThis bot\'s sole purpose is to download <code>.mp3\'s</code> for you.' \
                ' And nothing else.\nJust send performer, title or both and it will try to find needed track.' \
-               '\n\n<code>Also check out other bots written by </code>@Lor3m<code>:</code>\n - @GetAltsBot\n' \
+               '\n\n<code>Also check out other bots written by </code>@Lor3m<code>:</code>\n\n - @YTButlerBot\n' \
                ' - @HeyTacoBot'
 
 no_results_phrase = '<b>Sorry, but there are no results.</b>'

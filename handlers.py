@@ -1,6 +1,5 @@
 from telegram.ext import (CommandHandler, MessageHandler, Filters, CallbackQueryHandler, callbackcontext, run_async)
 from telegram import (ParseMode, InlineKeyboardButton, InlineKeyboardMarkup, Update)
-from telegram.error import BadRequest
 from musxtools import parse_html, get_html, add_url, format_query, store_track
 import requests
 from phrases import track_form, start_phrase, no_results_phrase, searching_phrase, download_started_phrase,\
@@ -8,6 +7,7 @@ from phrases import track_form, start_phrase, no_results_phrase, searching_phras
 from buttons import download_button_text, next_button_text, previous_button_text
 from chattools import clean_chat, get_cid, store_user
 import os
+from telegram.error import BadRequest
 from random import randint
 
 
@@ -92,6 +92,10 @@ def switch_track_callback(update: Update, context: callbackcontext):
     cid = get_cid(update)
     mid = update.callback_query.message.message_id
     next_track = int(update.callback_query.data.split(':')[-1])
+    if context.chat_data.get('results') is None:
+        context.bot.delete_message(chat_id=cid,
+                                   message_id=mid)
+        return
     results = context.chat_data['results']
 
     download_button = InlineKeyboardButton(text=download_button_text,
@@ -117,15 +121,20 @@ def switch_track_callback(update: Update, context: callbackcontext):
         keyboard = InlineKeyboardMarkup([[download_button],
                                          [previous_button, next_button]])
 
-    context.bot.edit_message_text(chat_id=cid,
-                                  message_id=mid,
-                                  text=track_form.format(next_track + 1,
-                                                         len(results),
-                                                         results[next_track]['performer'],
-                                                         results[next_track]['title'],
-                                                         results[next_track]['duration']),
-                                  parse_mode=ParseMode.HTML,
-                                  reply_markup=keyboard)
+    try:
+
+        context.bot.edit_message_text(chat_id=cid,
+                                      message_id=mid,
+                                      text=track_form.format(next_track + 1,
+                                                             len(results),
+                                                             results[next_track]['performer'],
+                                                             results[next_track]['title'],
+                                                             results[next_track]['duration']),
+                                      parse_mode=ParseMode.HTML,
+                                      reply_markup=keyboard)
+
+    except BadRequest:
+        pass
 
 
 switch_track_handler = CallbackQueryHandler(callback=switch_track_callback,
@@ -137,6 +146,12 @@ switch_track_handler = CallbackQueryHandler(callback=switch_track_callback,
 def download_track_callback(update: Update, context: callbackcontext):
 
     cid = get_cid(update)
+    mid = update.callback_query.message.message_id
+
+    if context.chat_data.get('results') is None:
+        context.bot.delete_message(chat_id=cid,
+                                   message_id=mid)
+        return
 
     try:
 
