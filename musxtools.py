@@ -1,7 +1,7 @@
 import requests
 from phrases import url
 from bs4 import BeautifulSoup
-from dbmodels import Tracks, Users
+from dbmodels import Tracks, Users, db
 
 
 def format_query(q):
@@ -104,13 +104,15 @@ def parse_html(html):
 
 def store_track(uid, title, performer, file_id, download_url):
 
-    user = Users.get(Users.uid == uid)
+    with db:
 
-    Tracks.create(user=user,
-                  title=title,
-                  performer=performer,
-                  file_id=file_id,
-                  download_url=download_url)
+        user = Users.get(Users.uid == uid)
+
+        Tracks.create(user=user,
+                      title=title,
+                      performer=performer,
+                      file_id=file_id,
+                      download_url=download_url)
 
 
 
