@@ -1,4 +1,4 @@
-url = 'https://wwi.mp3-tut.online/search?query='
+url = 'https://downloadmusicvk.ru/audio/search?q='
 
 track_form = '''
 <b>### Track {} / {} ###</b>\n

@@ -70,6 +70,7 @@ def get_html(link):
     """ downloading html """
 
     r = requests.get(link)
+
     return r.text
 
 
@@ -79,19 +80,18 @@ def parse_html(html):
     soup = BeautifulSoup(html, features='html.parser')
     tracks = list()
 
-    for block in soup.find_all('div', class_='audio-list-entry-inner'):
+    for block in soup.find_all('div', class_='audio'):
         track = dict()
 
-        name = block.find('div', class_='track')
+        performer = block.find('span', class_='audio-artist').next.next.next
+        
+        title = performer.next
+        title = title[3:]
 
-        performer = name.find('div', class_='title').next.next
-        try:
-            title = name.find('div', class_='special-title').next
-        except AttributeError:
-            title = name.find('div', class_='title').next.next
+        duration = block.find('div', class_='duration').next.next.next.replace('\n', '')
 
-        duration = block.find('div', class_='audio-duration').next
-        download_url = block.find('div', class_='download-container').find('a')['href']
+        download_url = 'https://downloadmusicvk.ru/' + block.find('a', class_='download')['href']
+        download_url = download_url.replace('predownload', 'download')
 
         track.update({'performer': performer,
                       'title': title,
